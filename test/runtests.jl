@@ -60,3 +60,33 @@ end
     shifted = Transformation(model, (x, y), (u + x, v))
     @test Apoblast.Core.apply_trans(model, shifted, diff(u, x)) == diff(u, x) + 1
 end
+
+@testset "Apoblast.jl / coeff_matrix" begin
+    x = Sym("x")
+    y = Sym("y")
+    z = Sym("z")
+
+    T, D, g = Apoblast.Core.coeff_matrix(Sym[2 * x + 3 * y, x - z], Sym[x, y])
+
+    @test T == Sym[2 3; 1 0]
+    @test D == Sym[0; -1;;]
+    @test g == Sym[z]
+end
+
+@testset "Apoblast.jl / trans_matrix" begin
+    model = Model(("x", "y"), ("u", "v"))
+    x, y = model.coords
+    u, v = model.fields
+
+    reflection = Transformation(model, (x, -y), (u, -v))
+    T, D, g = Apoblast.Core.trans_matrix(model, reflection, Sym[v, diff(u, y)])
+    @test T == Sym[-1 0; 0 -1]
+    @test size(D) == (2, 0)
+    @test g == Sym[]
+
+    shifted = Transformation(model, (x, y), (u + x, v))
+    T, D, g = Apoblast.Core.trans_matrix(model, shifted, Sym[diff(u, x)])
+    @test T == Sym[1;;]
+    @test D == Sym[1;;]
+    @test g == Sym[Sym(1)]
+end

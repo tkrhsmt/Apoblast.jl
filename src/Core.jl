@@ -102,21 +102,20 @@ function coeff_matrix(terms_after::Vector{<:Sym}, terms_before::Vector{<:Sym})
     terms_len_after, terms_len_before = length(terms_after), length(terms_before)
 
     # Classify the terms after transformation to get their coefficients in terms of the original terms
-    z = []
+    z = Dict{Any, Any}[]
     for term in terms_after
         push!(z, _classify(term))
     end
 
     # Collect the unique terms from the original terms that appear in the classified terms
-    g = []
+    g = Sym[]
     for term_dict in z
         for (key, _) in term_dict
-            if !(key in terms_before)
+            if key isa Sym && !(key in terms_before) && !(key in g)
                 push!(g, key)
             end
         end
     end
-    g = Set(g)
     g_len = length(g)
 
     # Construct the transformation matrix T
