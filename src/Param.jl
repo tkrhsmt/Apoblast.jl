@@ -20,7 +20,9 @@ struct Model
 
     function Model(coords::Tuple{Vararg{String}}, fields::Tuple{Vararg{String}})
 
+        # ex. coords = ("x", "y") -> coords_sym = (x, y)
         coords_sym = Tuple(map(c -> Sym(c), coords))
+        # ex. fields = ("u", "v") -> fields_sym = (u(x, y), v(x, y))
         fields_sym = Tuple(map(f -> SymFunction(f)(coords_sym...), fields))
 
         new(coords_sym, fields_sym)
