@@ -1,6 +1,6 @@
 module Apoblast
 
-export Model, Library
+export Model, Library, Transformation
 
 include("Utils.jl")
 using .Utils
