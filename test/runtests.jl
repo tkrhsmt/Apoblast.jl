@@ -34,11 +34,13 @@ end
     @test reflection.coords_replace_dict == Dict(x => x, y => -y)
     @test reflection.fields_replace_dict == Dict(u => u, v => -v)
     @test reflection.parameter == ()
+    @test reflection.parameter_fixed == Dict()
     @test reflection.jacobian_inverse == Sym[1 0; 0 -1]
 
     a = Sym("a")
-    shifted = Transformation(model, (x + a, -y), (u + a, -v); parameter = (a,))
+    shifted = Transformation(model, (x + a, -y), (u + a, -v); parameter=((a, Sym(0)),))
     @test shifted.parameter == (a,)
+    @test shifted.parameter_fixed == Dict(a => Sym(0))
     @test shifted.coords_replace_dict == Dict(x => x + a, y => -y)
     @test shifted.fields_replace_dict == Dict(u => u + a, v => -v)
     @test shifted.jacobian_inverse == Sym[1 0; 0 -1]
@@ -66,7 +68,7 @@ end
     y = Sym("y")
     z = Sym("z")
 
-    T, D, g = Apoblast.Core.coeff_matrix(Sym[2 * x + 3 * y, x - z], Sym[x, y])
+    T, D, g = Apoblast.Core.coeff_matrix(Sym[2*x+3*y, x-z], Sym[x, y])
 
     @test T == Sym[2 3; 1 0]
     @test D == Sym[0; -1;;]

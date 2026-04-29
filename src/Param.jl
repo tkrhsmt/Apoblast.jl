@@ -64,14 +64,15 @@ struct Transformation
     coords_replace_dict::Dict{Sym,Sym}
     fields_replace_dict::Dict{Sym,Sym}
     parameter::Tuple{Vararg{Sym}}
+    parameter_fixed::Dict{Sym,Sym}
     jacobian_inverse::Matrix{Sym}
 
     function Transformation(
         model::Model,
         coords_replace::Tuple{Vararg{Sym}},
         fields_replace::Tuple{Vararg{Sym}};
-        parameter::Tuple{Vararg{Sym}}=(),
-        jacobian_inverse::Union{Nothing, Matrix{Sym}}=nothing,
+        parameter::Union{Tuple{Tuple{Vararg{Sym}}},Nothing}=nothing,
+        jacobian_inverse::Union{Nothing,Matrix{Sym}}=nothing,
     )
 
         # create replacement dictionaries for coordinates and fields
@@ -86,7 +87,15 @@ struct Transformation
             jacobian_inverse = SymPy.simplify(SymPy.inv(jacobian_matrix))
         end
 
-        new(coords_replace, fields_replace, coords_replace_dict, fields_replace_dict, parameter, jacobian_inverse)
+        if parameter === nothing
+            parameter_vars = ()
+            parameter_fixed = Dict()
+        else
+            parameter_vars = map(p -> p[1], parameter) |> Tuple
+            parameter_fixed = Dict(parameter)
+        end
+
+        new(coords_replace, fields_replace, coords_replace_dict, fields_replace_dict, parameter_vars, parameter_fixed, jacobian_inverse)
 
     end
 end
