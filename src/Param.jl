@@ -64,14 +64,14 @@ struct Transformation
     coords_replace_dict::Dict{Sym,Sym}
     fields_replace_dict::Dict{Sym,Sym}
     parameter::Tuple{Vararg{Sym}}
-    jacobian_inverse::Array{Sym}
+    jacobian_inverse::Matrix{Sym}
 
     function Transformation(
         model::Model,
         coords_replace::Tuple{Vararg{Sym}},
         fields_replace::Tuple{Vararg{Sym}};
         parameter::Tuple{Vararg{Sym}}=(),
-        jacobian_inverse::Union{Nothing, Sym}=nothing,
+        jacobian_inverse::Union{Nothing, Matrix{Sym}}=nothing,
     )
 
         # create replacement dictionaries for coordinates and fields
