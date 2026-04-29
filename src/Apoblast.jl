@@ -1,5 +1,8 @@
 module Apoblast
 
-# Write your package code here.
+export Model
+
+include("Param.jl")
+using .Param
 
 end
