@@ -40,6 +40,8 @@ struct Library
     term::Tuple{Vararg{Sym}}
 
     function Library(model::Model, term::Tuple{Vararg{Sym}})
+
+        # validate that the terms only contain symbols from model.coords and model.fields
         Utils.validate_terms(model, term)
 
         new(term)
