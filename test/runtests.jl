@@ -43,3 +43,20 @@ end
     @test shifted.fields_replace_dict == Dict(u => u + a, v => -v)
     @test shifted.jacobian_inverse == Sym[1 0; 0 -1]
 end
+
+@testset "Apoblast.jl / apply_trans" begin
+    model = Model(("x", "y"), ("u", "v"))
+    x, y = model.coords
+    u, v = model.fields
+
+    reflection = Transformation(model, (x, -y), (u, -v))
+    @test Apoblast.Core.apply_trans(model, reflection, x) == x
+    @test Apoblast.Core.apply_trans(model, reflection, y) == -y
+    @test Apoblast.Core.apply_trans(model, reflection, v) == -v
+    @test Apoblast.Core.apply_trans(model, reflection, sin(x + v)) == sin(x - v)
+    @test Apoblast.Core.apply_trans(model, reflection, diff(u, y)) == -diff(u, y)
+    @test Apoblast.Core.apply_trans(model, reflection, diff(u, y, 2)) == diff(u, y, 2)
+
+    shifted = Transformation(model, (x, y), (u + x, v))
+    @test Apoblast.Core.apply_trans(model, shifted, diff(u, x)) == diff(u, x) + 1
+end
