@@ -1,6 +1,7 @@
 module Apoblast
 
 export Model, Library, Transformation
+export listorder
 export collect_follower
 
 include("Utils.jl")

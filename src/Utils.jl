@@ -1,6 +1,6 @@
 module Utils
 
-export validate_terms, safe_print
+export validate_terms, safe_print, listorder
 
 using SymPy
 using PyCall
@@ -73,6 +73,43 @@ Prints the given string if `print_progress` is true.
 """
 function safe_print(print_progress::Bool, str::String)
     print_progress && println(str)
+end
+
+"""
+    listorder(monoterms, order)
+Generates a list of all combinations of the given monoterms up to the specified order. For example, if `monoterms` is `[x, y]` and `order` is 2, it will generate `[1, x, y, x^2, x*y, y^2]`.
+
+# Arguments
+- `monoterms`: A vector of symbolic variables representing the monoterms to combine.
+- `order`: An integer specifying the maximum order of combinations to generate.
+"""
+function listorder(monoterms::Vector, order::Int=2)
+    isempty(monoterms) && return [1]
+
+    return vcat([
+        [(monoterms[1]^i) * t
+         for t in listorder(monoterms[2:end], order - i)]
+        for i in 0:order
+    ]...)
+end
+
+"""
+    listorder(monoterm, coords, order)
+Generates a list of all combinations of derivatives of the given monoterm with respect to the specified coordinates up to the specified order. For example, if `monoterm` is `u`, `coords` is `[x, y]`, and `order` is 2, it will generate a list of derivatives like `[u, diff(u, x), diff(u, y), diff(u, x, x), diff(u, x, y), diff(u, y, y)].
+
+# Arguments
+- `monoterm`: A symbolic expression representing the monoterm to differentiate.
+- `coords`: A vector of symbolic variables representing the coordinates with respect to which the derivatives will be taken.
+- `order`: An integer specifying the maximum order of derivatives to generate.
+"""
+function listorder(monoterm::Sym, coords::Vector, order::Int=2)
+    isempty(coords) && return monoterm
+
+    return vcat([
+        [diff(t, coords[1], i)
+         for t in listorder(monoterm, coords[2:end], order - i)]
+        for i in 0:order
+    ]...)
 end
 
 
