@@ -186,7 +186,7 @@ function make_K_matrix!(K, T, X, D)
 
             # - X R -> K Rv
             for d in 1:X_col
-                K[K_row_count, b+(d-1)*X_col] -= X[a, d]
+                K[K_row_count, b+(d-1)*T_col] -= X[a, d]
             end
 
             K_row_count += 1
@@ -194,12 +194,12 @@ function make_K_matrix!(K, T, X, D)
     end
 
     # R D = 0 -> K Rv = 0
-    for a in 1:K_row
+    for a in 1:X_row
         for b in 1:D_col
 
             # R D -> K Rv
             for c in 1:D_row
-                K[K_row_count, c+(a-1)*D_col] += D[c, b]
+                K[K_row_count, c+(a-1)*D_row] += D[c, b]
             end
 
             K_row_count += 1
