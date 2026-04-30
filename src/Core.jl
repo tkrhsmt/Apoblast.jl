@@ -5,6 +5,8 @@ using PyCall
 using ..Utils
 using ..Param
 
+export apply_trans, coeff_matrix, trans_matrix, infinitesimal_trans_matrix, collect_follower
+
 function _is_derivative(expr::Sym)
     class_key = expr.class_key()
     return length(class_key) >= 3 && string(class_key[3]) == "Derivative"
@@ -192,7 +194,6 @@ end
 # ==============================================================================
 
 function make_K_matrix!(K, T, X, D)
-    K_row, K_col = size(K)
     K_row_count = 1
 
     X_row, X_col = size(X)
@@ -285,6 +286,18 @@ function coeff_basis(model::Model, library::Library, trans::Tuple{Vararg{Transfo
     return Kb
 end
 
+"""
+    collect_follower(model::Model, library::Library, Li::Vector{<:Sym}, f̃::Vector{<:Sym}, trans::Transformation...)
+
+Given a model, a library of terms, a set of linearly independent terms `Li`, a set of transformed terms `f̃`, and a variable number of transformations, this function collects the follower terms by applying the transformations to the basis of coefficients obtained from the `coeff_basis` function. The resulting follower terms are returned as a vector.
+
+# Parameters
+- `model`: An instance of the Model struct containing defined coordinates and fields.
+- `library`: An instance of the Library struct containing the terms to be used in the transformations.
+- `Li`: A vector of symbolic expressions representing the linearly independent terms before transformation.
+- `f̃`: A vector of symbolic expressions representing the transformed terms after applying the transformations.
+- `trans`: A variable number of Transformation instances representing the transformations to be applied.
+"""
 function collect_follower(model::Model, library::Library, Li::Vector{<:Sym}, f̃::Vector{<:Sym}, trans::Transformation...)
     Kb = coeff_basis(model, library, trans, Li, f̃)
     Kb_row, Kb_col = size(Kb)
