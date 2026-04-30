@@ -243,6 +243,24 @@ function sympy_eye(n::Int)
     return tmp
 end
 
+function _apply_constraint!(Kb, L, L⁺, Li, f̃, f, model::Model, comp_trans::Transformation, trans_builder, span_error::AbstractString; check_rank::Bool=false)
+    T̃, D̃, _ = trans_builder(model, comp_trans, f̃)
+    X = L * T̃ * L⁺
+    check_rank && @assert rank(X) == length(Li) "Transformed Li must remain linearly independent"
+    @assert all(iszero, L * D̃) span_error
+
+    T, D, g = trans_builder(model, comp_trans, f)
+
+    K_row = length(Li) * (length(f) + length(g))
+    K_col = length(Li) * length(f)
+    K = zeros(Sym, K_row, K_col)
+    make_K_matrix!(K, T, X, D)
+
+    K = K * Kb
+    N = hcat(K.nullspace()...)
+    return Kb * N
+end
+
 function coeff_basis(model::Model, library::Library, trans::Tuple{Vararg{Transformation}}, Li::Vector{<:Sym}, f̃::Vector{<:Sym})
 
     L, _, gd = coeff_matrix(Li, f̃)
@@ -254,37 +272,11 @@ function coeff_basis(model::Model, library::Library, trans::Tuple{Vararg{Transfo
     for comp_trans in trans
 
         if comp_trans.parameter == ()
-            T̃, D̃, _ = trans_matrix(model, comp_trans, f̃)
-            X = L * T̃ * L⁺
-            @assert rank(X) == length(Li) "Transformed Li must remain linearly independent"
-            @assert all(iszero, L * D̃) "Transformed Li must stay within span(f̃)"
-
-            T, D, g = trans_matrix(model, comp_trans, f)
-
-            K_row = length(Li) * (length(f) + length(g))
-            K_col = length(Li) * length(f)
-            K = zeros(Sym, K_row, K_col)
-            make_K_matrix!(K, T, X, D)
-
-            K = K * Kb
-            N = hcat(K.nullspace()...)
-            Kb = Kb * N
+            Kb = _apply_constraint!(Kb, L, L⁺, Li, f̃, f, model, comp_trans, trans_matrix, "Transformed Li must stay within span(f̃)"; check_rank=true)
         else
             for parameter in comp_trans.parameter
-                T̃, D̃, _ = infinitesimal_trans_matrix(model, comp_trans, parameter, f̃)
-                X = L * T̃ * L⁺
-                @assert all(iszero, L * D̃) "Infinitesimal action on Li must stay within span(f̃)"
-
-                T, D, g = infinitesimal_trans_matrix(model, comp_trans, parameter, f)
-
-                K_row = length(Li) * (length(f) + length(g))
-                K_col = length(Li) * length(f)
-                K = zeros(Sym, K_row, K_col)
-                make_K_matrix!(K, T, X, D)
-
-                K = K * Kb
-                N = hcat(K.nullspace()...)
-                Kb = Kb * N
+                builder = (model, trans, terms) -> infinitesimal_trans_matrix(model, trans, parameter, terms)
+                Kb = _apply_constraint!(Kb, L, L⁺, Li, f̃, f, model, comp_trans, builder, "Infinitesimal action on Li must stay within span(f̃)")
             end
         end
 
