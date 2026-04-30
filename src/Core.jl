@@ -19,14 +19,18 @@ function _is_plain_function_application(model::Model, expr::Sym)
     return true
 end
 
-function _apply_derivative_rule(model::Model, trans::Transformation, expr::Sym)
-    differentiated = apply_trans(model, trans, expr.args[1])
+function _coord_index_map(model::Model)
+    return Dict(coord => i for (i, coord) in pairs(model.coords))
+end
+
+function _apply_derivative_rule(model::Model, trans::Transformation, expr::Sym, cache::AbstractDict, coord_index_map::AbstractDict)
+    differentiated = _apply_trans_cached(model, trans, expr.args[1], cache, coord_index_map)
 
     result = differentiated
     for variable_count in expr.args[2:end]
         coord = variable_count.args[1]
         count = Int(variable_count.args[2])
-        coord_index = findfirst(isequal(coord), model.coords)
+        coord_index = get(coord_index_map, coord, nothing)
         coord_index === nothing && return expr
 
         for _ in 1:count
@@ -40,6 +44,26 @@ function _apply_derivative_rule(model::Model, trans::Transformation, expr::Sym)
     return result
 end
 
+function _apply_trans_cached(model::Model, trans::Transformation, term::Sym, cache::AbstractDict, coord_index_map::AbstractDict)
+    return get!(cache, term) do
+
+        if _is_plain_function_application(model, term)
+            transformed_args = map(arg -> _apply_trans_cached(model, trans, arg, cache, coord_index_map), term.args)
+            return term.func(transformed_args...)
+        end
+
+        replacement = get(trans.coords_replace_dict, term, nothing)
+        replacement !== nothing && return replacement
+
+        replacement = get(trans.fields_replace_dict, term, nothing)
+        replacement !== nothing && return replacement
+
+        _is_derivative(term) && return _apply_derivative_rule(model, trans, term, cache, coord_index_map)
+
+        return term
+    end
+end
+
 """
     apply_trans(model::Model, trans::Transformation, term::Sym)
 
@@ -51,30 +75,8 @@ Applies the given transformation to the specified term (symbolic expression) bas
 - `term`: A symbolic expression (Sym) to which the transformation will be applied.
 """
 function apply_trans(model::Model, trans::Transformation, term::Sym)
-
-    # If s = f(e_1, ..., e_k) for an ordinary scalar-valued function f,
-    # recursively apply the transformation to each argument first.
-    if _is_plain_function_application(model, term)
-        transformed_args = map(arg -> apply_trans(model, trans, arg), term.args)
-        return term.func(transformed_args...)
-    end
-
-    # If s is a coordinate x_i, apply the coordinate replacement rule.
-    for (coord, replacement) in zip(model.coords, trans.coords_replace)
-        term == coord && return replacement
-    end
-
-    # If s is a field u_i, apply the field replacement rule.
-    for (field, replacement) in zip(model.fields, trans.fields_replace)
-        term == field && return replacement
-    end
-
-    # If s is a derivative, recursively transform the inner expression and
-    # then apply the Jacobian-based derivative replacement rule.
-    _is_derivative(term) && return _apply_derivative_rule(model, trans, term)
-
-    # If no rule matches, return the original expression.
-    return term
+    cache = Dict{Any,Any}()
+    return _apply_trans_cached(model, trans, term, cache, _coord_index_map(model))
 end
 
 # ==============================================================================
@@ -104,17 +106,17 @@ function coeff_matrix(terms_after::Vector{<:Sym}, terms_before::Vector{<:Sym})
     terms_len_after, terms_len_before = length(terms_after), length(terms_before)
 
     # Classify the terms after transformation to get their coefficients in terms of the original terms
-    z = Dict{Any,Any}[]
-    for term in terms_after
-        push!(z, _classify(term))
-    end
+    z = [_classify(term) for term in terms_after]
 
     # Collect the unique terms from the original terms that appear in the classified terms
     g = Sym[]
+    terms_before_set = Set(terms_before)
+    g_set = Set{Sym}()
     for term_dict in z
         for (key, _) in term_dict
-            if key isa Sym && !(key in terms_before) && !(key in g)
+            if key isa Sym && !(key in terms_before_set) && !(key in g_set)
                 push!(g, key)
+                push!(g_set, key)
             end
         end
     end
@@ -153,11 +155,9 @@ Applies the given transformation to a list of symbolic expressions (terms) and c
 function trans_matrix(model::Model, trans::Transformation, terms_before::Vector{<:Sym})
 
     # Apply the transformation to each term in terms_before to get terms_after
-    terms_after = []
-    for term in terms_before
-        push!(terms_after, apply_trans(model, trans, term))
-    end
-    terms_after = Sym.(terms_after)
+    cache = Dict{Any,Any}()
+    coord_index_map = _coord_index_map(model)
+    terms_after = [_apply_trans_cached(model, trans, term, cache, coord_index_map) for term in terms_before]
 
     # Compute the transformation matrix T, the coefficient matrix D for the leak terms, and the list of leak terms g
     T, D, g = coeff_matrix(terms_after, terms_before)
@@ -179,9 +179,12 @@ Applies an infinitesimal transformation to a list of symbolic expressions (terms
 """
 function infinitesimal_trans_matrix(model::Model, trans::Transformation, parameter::Sym, terms_before::Vector{<:Sym})
 
+    cache = Dict{Any,Any}()
+    coord_index_map = _coord_index_map(model)
     terms_after = Sym[]
+    sizehint!(terms_after, length(terms_before))
     for term in terms_before
-        transformed = apply_trans(model, trans, term)
+        transformed = _apply_trans_cached(model, trans, term, cache, coord_index_map)
         differentiated = diff(transformed, parameter)
         push!(terms_after, simplify(differentiated(trans.parameter_fixed)))
     end
