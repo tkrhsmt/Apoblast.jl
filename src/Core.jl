@@ -220,14 +220,14 @@ end
 
 function coeff_basis(model::Model, library::Library, trans::Tuple{Vararg{Transformation}}, Li::Vector{<:Sym}, f̃::Vector{<:Sym})
 
+    L, _, gd = coeff_matrix(Li, f̃)
+    @assert gd == Sym[] "Li must not include any leak terms that are not in f̃"
+    L⁺ = L.pinv()
+
     Kb = sympy_eye(length(Li) * length([library.term...]))
     for comp_trans in trans
 
-        L, _, gd = coeff_matrix(Li, f̃)
-        @assert gd == Sym[] "Li must not include any leak terms that are not in f̃"
-
         T̃, D̃, g̃ = trans_matrix(model, comp_trans, f̃)
-        L⁺ = L.pinv()
         X = L * T̃ * L⁺
 
         f = [library.term...]
