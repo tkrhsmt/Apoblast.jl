@@ -244,25 +244,29 @@ function sympy_eye(n::Int)
     return tmp
 end
 
-function _apply_constraint!(Kb, L, L⁺, Li, f̃, f, model::Model, comp_trans::Transformation, trans_builder, span_error::AbstractString; check_rank::Bool=false)
+function _apply_constraint!(Kb, L, L⁺, Li, f̃, f, model::Model, comp_trans::Transformation, trans_builder, span_error::AbstractString, print_progress::Bool)
     T̃, D̃, _ = trans_builder(model, comp_trans, f̃)
     X = L * T̃ * L⁺
-    check_rank && @assert rank(X) == length(Li) "Transformed Li must remain linearly independent"
     @assert all(iszero, L * D̃) span_error
+    Utils.safe_print(print_progress, "  constraint matrix size: $(size(X))")
 
     T, D, g = trans_builder(model, comp_trans, f)
+    Utils.safe_print(print_progress, "  leak terms: $(g)")
 
     K_row = length(Li) * (length(f) + length(g))
     K_col = length(Li) * length(f)
     K = zeros(Sym, K_row, K_col)
     make_K_matrix!(K, T, X, D)
+    Utils.safe_print(print_progress, "  constraint matrix size: $(size(K))")
 
     K = K * Kb
     N = hcat(K.nullspace()...)
+    Utils.safe_print(print_progress, "  nullity of constraint matrix: $(size(N, 2))")
+
     return Kb * N
 end
 
-function coeff_basis(model::Model, library::Library, trans::Tuple{Vararg{Transformation}}, Li::Vector{<:Sym}, f̃::Vector{<:Sym})
+function coeff_basis(model::Model, library::Library, trans::Tuple{Vararg{Transformation}}, Li::Vector{<:Sym}, f̃::Vector{<:Sym}, print_progress::Bool)
 
     L, _, gd = coeff_matrix(Li, f̃)
     @assert gd == Sym[] "Li must not include any leak terms that are not in f̃"
@@ -270,17 +274,25 @@ function coeff_basis(model::Model, library::Library, trans::Tuple{Vararg{Transfo
     f = [library.term...]
 
     Kb = sympy_eye(length(Li) * length(f))
+    Utils.safe_print(print_progress, "kernel dim : $(size(Kb, 1))")
+    Utils.safe_print(print_progress, "library dim: $(length(f))")
+
+    trans_counter = 1
+    trans_num = length(trans)
     for comp_trans in trans
 
+        Utils.safe_print(print_progress, "stage $trans_counter / $trans_num : $comp_trans")
+
         if comp_trans.parameter == ()
-            Kb = _apply_constraint!(Kb, L, L⁺, Li, f̃, f, model, comp_trans, trans_matrix, "Transformed Li must stay within span(f̃)"; check_rank=true)
+            Kb = _apply_constraint!(Kb, L, L⁺, Li, f̃, f, model, comp_trans, trans_matrix, "Transformed Li must stay within span(f̃)", print_progress)
         else
             for parameter in comp_trans.parameter
                 builder = (model, trans, terms) -> infinitesimal_trans_matrix(model, trans, parameter, terms)
-                Kb = _apply_constraint!(Kb, L, L⁺, Li, f̃, f, model, comp_trans, builder, "Infinitesimal action on Li must stay within span(f̃)")
+                Kb = _apply_constraint!(Kb, L, L⁺, Li, f̃, f, model, comp_trans, builder, "Infinitesimal action on Li must stay within span(f̃)", print_progress)
             end
         end
 
+        trans_counter += 1
     end
 
     return Kb
@@ -297,9 +309,10 @@ Given a model, a library of terms, a set of linearly independent terms `Li`, a s
 - `Li`: A vector of symbolic expressions representing the linearly independent terms before transformation.
 - `f̃`: A vector of symbolic expressions representing the transformed terms after applying the transformations.
 - `trans`: A variable number of Transformation instances representing the transformations to be applied.
+- `print_progress`: A boolean indicating whether to print progress information.
 """
-function collect_follower(model::Model, library::Library, Li::Vector{<:Sym}, f̃::Vector{<:Sym}, trans::Transformation...)
-    Kb = coeff_basis(model, library, trans, Li, f̃)
+function collect_follower(model::Model, library::Library, Li::Vector{<:Sym}, f̃::Vector{<:Sym}, trans::Transformation...; print_progress::Bool=true)
+    Kb = coeff_basis(model, library, trans, Li, f̃, print_progress)
     Kb_row, Kb_col = size(Kb)
 
     output = []

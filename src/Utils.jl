@@ -1,6 +1,6 @@
 module Utils
 
-export validate_terms
+export validate_terms, safe_print
 
 using SymPy
 using PyCall
@@ -64,6 +64,15 @@ function find_invalid_fieldlike_function(expr, coords, allowed_fields)
     end
 
     return nothing
+end
+
+"""
+    safe_print(print_progress, str)
+
+Prints the given string if `print_progress` is true.
+"""
+function safe_print(print_progress::Bool, str::String)
+    print_progress && println(str)
 end
 
 
