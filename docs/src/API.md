@@ -1,10 +1,4 @@
-```@meta
-CurrentModule = Apoblast
-```
-
-# Apoblast
-
-Documentation for [Apoblast](https://github.com/tkrhsmt/Apoblast.jl).
+# API Reference
 
 ```@index
 ```
@@ -33,5 +27,4 @@ Apoblast.Core.infinitesimal_trans_matrix
 Apoblast.Utils.validate_terms
 Apoblast.Utils.safe_print
 Apoblast.Utils.find_invalid_fieldlike_function
-Apoblast.Utils.listorder
 ```
