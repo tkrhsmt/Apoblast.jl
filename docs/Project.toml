@@ -1,3 +1,6 @@
 [deps]
 Apoblast = "15a2c61a-6edf-49df-b466-83ca3e1f2749"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+
+[compat]
+Documenter = "1.17.0"
