@@ -276,7 +276,7 @@ function collect_follower(model::Model, library::Library, Li::Vector{<:Sym}, f̃
     f_length = length(f)
     for i in 1:Kb_col
         v = Kb[:, i]
-        m = reshape(v, Kb_row ÷ f_length, f_length)
+        m = permutedims(reshape(v, f_length, Kb_row ÷ f_length))
         push!(output, m * f)
     end
     return output
