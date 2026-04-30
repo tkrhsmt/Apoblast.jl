@@ -102,7 +102,7 @@ function coeff_matrix(terms_after::Vector{<:Sym}, terms_before::Vector{<:Sym})
     terms_len_after, terms_len_before = length(terms_after), length(terms_before)
 
     # Classify the terms after transformation to get their coefficients in terms of the original terms
-    z = Dict{Any, Any}[]
+    z = Dict{Any,Any}[]
     for term in terms_after
         push!(z, _classify(term))
     end
@@ -162,6 +162,124 @@ function trans_matrix(model::Model, trans::Transformation, terms_before::Vector{
     T, D, g = coeff_matrix(terms_after, terms_before)
 
     return T, D, g
+end
+
+# ==============================================================================
+
+function make_K_matrix!(K, T, X, D)
+    K_row, K_col = size(K)
+    K_row_count = 1
+
+    X_row, X_col = size(X)
+    T_row, T_col = size(T)
+    D_row, D_col = size(D)
+
+    # R T - X R = 0 -> K Rv = 0
+    # R : unknown coefficient matrix, Rv : vectorized form of R
+    for a in 1:X_row
+        for b in 1:T_col
+
+            # R T -> K Rv
+            for c in 1:T_row
+                K[K_row_count, c+(a-1)*T_col] += T[c, b]
+            end
+
+            # - X R -> K Rv
+            for d in 1:X_col
+                K[K_row_count, b+(d-1)*X_col] -= X[a, d]
+            end
+
+            K_row_count += 1
+        end
+    end
+
+    # R D = 0 -> K Rv = 0
+    for a in 1:K_row
+        for b in 1:D_col
+
+            # R D -> K Rv
+            for c in 1:D_row
+                K[K_row_count, c+(a-1)*D_col] += D[c, b]
+            end
+
+            K_row_count += 1
+        end
+    end
+
+    return nothing
+end
+
+function sympy_eye(n::Int)
+
+    tmp = zeros(Sym, n, n)
+    for i in 1:n
+        tmp[i, i] = Sym(1)
+    end
+    return tmp
+end
+
+function coeff_basis(model::Model, library::Library, trans::Tuple{Vararg{Transformation}}, Li::Vector{<:Sym}, f̃::Vector{<:Sym})
+
+    Kb = sympy_eye(length(Li) * length([library.term...]))
+    for comp_trans in trans
+
+        L, _, gd = coeff_matrix(Li, f̃)
+        @assert gd == Sym[] "Li must not include any leak terms that are not in f̃"
+
+        T̃, D̃, g̃ = trans_matrix(model, comp_trans, f̃)
+        L⁺ = L.pinv()
+        X = L * T̃ * L⁺
+
+        f = [library.term...]
+        T, D, g = trans_matrix(model, comp_trans, f)
+
+        K_row = length(Li) * (length(f) + length(g))
+        K_col = length(Li) * length(f)
+        K = zeros(Sym, K_row, K_col)
+        make_K_matrix!(K, T, X, D)
+
+        K = K * Kb
+        N = hcat(K.nullspace()...)
+        Kb = Kb * N
+
+    end
+
+    return Kb
+end
+
+function collect_follower(model::Model, library::Library, Li::Vector{<:Sym}, f̃::Vector{<:Sym}, trans::Transformation...)
+
+    trans_list = []
+    for comp_trans in trans
+        if comp_trans.parameter == ()
+            push!(trans_list, comp_trans)
+        else
+            tmp1 = Transformation(model,
+                map(g -> g(comp_trans.parameter_fixed), comp_trans.coords_replace),
+                map(g -> g(comp_trans.parameter_fixed), comp_trans.fields_replace)
+            )
+            tmp2 = map(h -> Transformation(model,
+                    map(g -> diff(g, h)(comp_trans.parameter_fixed), comp_trans.coords_replace),
+                    map(g -> diff(g, h)(comp_trans.parameter_fixed), comp_trans.fields_replace)
+                ), comp_trans.parameter
+            )
+            push!(trans_list, tmp1)
+            push!(trans_list, tmp2...)
+        end
+    end
+
+    Kb = coeff_basis(model, library, Tuple(trans_list), Li, f̃)
+    Kb_row, Kb_col = size(Kb)
+
+    output = []
+    f = [library.term...]
+    f_length = length(f)
+    for i in 1:Kb_col
+        v = Kb[:, i]
+        m = reshape(v, Kb_row ÷ f_length, f_length)
+        push!(output, m * f)
+    end
+    return output
 end
 
 end
