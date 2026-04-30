@@ -12,7 +12,7 @@ This package is a Julia implementation of the [python package Apoblast](https://
 
 ```julia
 using Pkg
-Pkg.add("https://github.com/tkrhsmt/Apoblast.jl")
+Pkg.add(path="https://github.com/tkrhsmt/Apoblast.jl")
 ```
 
 ## Quick start
