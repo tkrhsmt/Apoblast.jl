@@ -92,3 +92,23 @@ end
     @test D == Sym[1;;]
     @test g == Sym[Sym(1)]
 end
+
+@testset "Apoblast.jl / infinitesimal_trans_matrix" begin
+    model = Model(("x", "y"), ("u", "v"))
+    x, y = model.coords
+    u, v = model.fields
+    θ = Sym("θ")
+
+    rotation = Transformation(
+        model,
+        (x * cos(θ) + y * sin(θ), y * cos(θ) - x * sin(θ)),
+        (u * cos(θ) + v * sin(θ), v * cos(θ) - u * sin(θ));
+        parameter=((θ, Sym(0)),),
+    )
+
+    T, D, g = Apoblast.Core.infinitesimal_trans_matrix(model, rotation, θ, Sym[u, diff(u, x)])
+
+    @test T == Sym[0 0; 0 0]
+    @test sum(D[1, j] * g[j] for j in eachindex(g)) == v
+    @test sum(D[2, j] * g[j] for j in eachindex(g)) == diff(v, x) - diff(u, y)
+end

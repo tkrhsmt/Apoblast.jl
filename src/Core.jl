@@ -151,7 +151,6 @@ Applies the given transformation to a list of symbolic expressions (terms) and c
 function trans_matrix(model::Model, trans::Transformation, terms_before::Vector{<:Sym})
 
     # Apply the transformation to each term in terms_before to get terms_after
-    terms_len = length(terms_before)
     terms_after = []
     for term in terms_before
         push!(terms_after, apply_trans(model, trans, term))
@@ -159,6 +158,32 @@ function trans_matrix(model::Model, trans::Transformation, terms_before::Vector{
     terms_after = Sym.(terms_after)
 
     # Compute the transformation matrix T, the coefficient matrix D for the leak terms, and the list of leak terms g
+    T, D, g = coeff_matrix(terms_after, terms_before)
+
+    return T, D, g
+end
+
+# ==============================================================================
+"""
+    infinitesimal_trans_matrix(model::Model, trans::Transformation, parameter::Sym, terms_before::Vector{<:Sym})
+
+Applies an infinitesimal transformation to a list of symbolic expressions (terms) and computes the transformation matrix `T`, the coefficient matrix `D` for any leak terms, and the list of leak terms `g`. The function first applies the transformation to each term in `terms_before`, differentiates the transformed terms with respect to the specified parameter, simplifies the result, and then uses the `coeff_matrix` function to compute the matrices and leak terms.
+
+# Parameters
+- `model`: An instance of the Model struct containing defined coordinates and fields.
+- `trans`: An instance of the Transformation struct containing the transformation rules.
+- `parameter`: A symbolic variable representing the parameter with respect to which the differentiation will be performed.
+- `terms_before`: A vector of symbolic expressions representing the terms before transformation.
+"""
+function infinitesimal_trans_matrix(model::Model, trans::Transformation, parameter::Sym, terms_before::Vector{<:Sym})
+
+    terms_after = Sym[]
+    for term in terms_before
+        transformed = apply_trans(model, trans, term)
+        differentiated = diff(transformed, parameter)
+        push!(terms_after, simplify(differentiated(trans.parameter_fixed)))
+    end
+
     T, D, g = coeff_matrix(terms_after, terms_before)
 
     return T, D, g
@@ -223,24 +248,45 @@ function coeff_basis(model::Model, library::Library, trans::Tuple{Vararg{Transfo
     L, _, gd = coeff_matrix(Li, f̃)
     @assert gd == Sym[] "Li must not include any leak terms that are not in f̃"
     L⁺ = L.pinv()
+    f = [library.term...]
 
-    Kb = sympy_eye(length(Li) * length([library.term...]))
+    Kb = sympy_eye(length(Li) * length(f))
     for comp_trans in trans
 
-        T̃, D̃, g̃ = trans_matrix(model, comp_trans, f̃)
-        X = L * T̃ * L⁺
+        if comp_trans.parameter == ()
+            T̃, D̃, _ = trans_matrix(model, comp_trans, f̃)
+            X = L * T̃ * L⁺
+            @assert rank(X) == length(Li) "Transformed Li must remain linearly independent"
+            @assert all(iszero, L * D̃) "Transformed Li must stay within span(f̃)"
 
-        f = [library.term...]
-        T, D, g = trans_matrix(model, comp_trans, f)
+            T, D, g = trans_matrix(model, comp_trans, f)
 
-        K_row = length(Li) * (length(f) + length(g))
-        K_col = length(Li) * length(f)
-        K = zeros(Sym, K_row, K_col)
-        make_K_matrix!(K, T, X, D)
+            K_row = length(Li) * (length(f) + length(g))
+            K_col = length(Li) * length(f)
+            K = zeros(Sym, K_row, K_col)
+            make_K_matrix!(K, T, X, D)
 
-        K = K * Kb
-        N = hcat(K.nullspace()...)
-        Kb = Kb * N
+            K = K * Kb
+            N = hcat(K.nullspace()...)
+            Kb = Kb * N
+        else
+            for parameter in comp_trans.parameter
+                T̃, D̃, _ = infinitesimal_trans_matrix(model, comp_trans, parameter, f̃)
+                X = L * T̃ * L⁺
+                @assert all(iszero, L * D̃) "Infinitesimal action on Li must stay within span(f̃)"
+
+                T, D, g = infinitesimal_trans_matrix(model, comp_trans, parameter, f)
+
+                K_row = length(Li) * (length(f) + length(g))
+                K_col = length(Li) * length(f)
+                K = zeros(Sym, K_row, K_col)
+                make_K_matrix!(K, T, X, D)
+
+                K = K * Kb
+                N = hcat(K.nullspace()...)
+                Kb = Kb * N
+            end
+        end
 
     end
 
@@ -248,27 +294,7 @@ function coeff_basis(model::Model, library::Library, trans::Tuple{Vararg{Transfo
 end
 
 function collect_follower(model::Model, library::Library, Li::Vector{<:Sym}, f̃::Vector{<:Sym}, trans::Transformation...)
-
-    trans_list = []
-    for comp_trans in trans
-        if comp_trans.parameter == ()
-            push!(trans_list, comp_trans)
-        else
-            tmp1 = Transformation(model,
-                map(g -> g(comp_trans.parameter_fixed), comp_trans.coords_replace),
-                map(g -> g(comp_trans.parameter_fixed), comp_trans.fields_replace)
-            )
-            tmp2 = map(h -> Transformation(model,
-                    map(g -> diff(g, h)(comp_trans.parameter_fixed), comp_trans.coords_replace),
-                    map(g -> diff(g, h)(comp_trans.parameter_fixed), comp_trans.fields_replace)
-                ), comp_trans.parameter
-            )
-            push!(trans_list, tmp1)
-            push!(trans_list, tmp2...)
-        end
-    end
-
-    Kb = coeff_basis(model, library, Tuple(trans_list), Li, f̃)
+    Kb = coeff_basis(model, library, trans, Li, f̃)
     Kb_row, Kb_col = size(Kb)
 
     output = []
