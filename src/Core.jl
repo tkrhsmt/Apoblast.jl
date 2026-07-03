@@ -35,7 +35,7 @@ function _apply_derivative_rule(model::Model, trans::Transformation, expr::Sym, 
 
         for _ in 1:count
             result = sum(
-                trans.jacobian_inverse[coord_index, j] * diff(result, model.coords[j]) for
+                trans.jacobian_inverse[j, coord_index] * diff(result, model.coords[j]) for
                 j in eachindex(model.coords)
             )
         end
