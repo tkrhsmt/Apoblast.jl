@@ -110,5 +110,5 @@ end
 
     @test T == Sym[0 0; 0 0]
     @test sum(D[1, j] * g[j] for j in eachindex(g)) == v
-    @test sum(D[2, j] * g[j] for j in eachindex(g)) == diff(v, x) - diff(u, y)
+    @test sum(D[2, j] * g[j] for j in eachindex(g)) == diff(v, x) + diff(u, y)
 end
